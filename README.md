@@ -5,9 +5,9 @@ Vnc2swf is a cross-platform screen recording tool for ShockWave Flash (swf), Fla
 Here is the Python version, please get more information from its original homepage.
 
 * For documentation, see [docs/pyvnc2swf.html](http://www.unixuser.org/~euske/vnc2swf/pyvnc2swf.html).
-* Homepage: http://www.unixuser.org/~euske/vnc2swf/
+* Homepage: <http://www.unixuser.org/~euske/vnc2swf/>
 * Download: [pyvnc2swf-0.9.5.tar.gz](http://www.unixuser.org/~euske/vnc2swf/pyvnc2swf-0.9.5.tar.gz)
-* Discussion: http://lists.sourceforge.net/lists/listinfo/vnc2swf-users
+* Discussion: <http://lists.sourceforge.net/lists/listinfo/vnc2swf-users>
 
 **Update**: Development of vnc2swf is now superseded by its successor, [vnc2flv](http://www.unixuser.org/~euske/python/vnc2flv/index.html). (2009/10/03)
 
