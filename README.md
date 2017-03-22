@@ -1,6 +1,8 @@
 # pyvnc2swf
 
-Vnc2swf is a cross-platform screen recording tool for ShockWave Flash (swf), Flash Video (flv), MPEG and raw VNCRev format.
+Vnc2swf is a cross-platform screen recording tool for ShockWave Flash (swf), Flash Video (flv), MPEG and raw VNCRev and noVNC format.
+
+The noVNC output support is added by [TinyLab.org](http://tinylab.org), the [VPlayer (Tiny noVNC Player)](https://github.com/showdesk/showdesk.github.io) of [Showdesk](https://showdesk.github.io) can replay it.
 
 Here is the Python version, please get more information from its original homepage.
 
@@ -10,7 +12,6 @@ Here is the Python version, please get more information from its original homepa
 * Discussion: <http://lists.sourceforge.net/lists/listinfo/vnc2swf-users>
 
 **Update**: Development of vnc2swf is now superseded by its successor, [vnc2flv](http://www.unixuser.org/~euske/python/vnc2flv/index.html). (2009/10/03)
-
 
 ## Acknowledgements
 
