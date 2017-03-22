@@ -32,7 +32,6 @@ lowerbound = max
 upperbound = min
 stderr = sys.stderr
 
-
 ##  PygameMoviePlayer
 ##
 class PygameMoviePlayer(MovieOutputStream):
@@ -233,7 +232,10 @@ def play(moviefiles, info, debug=0):
       movie.parse_flv(fname, True, debug=debug)
     elif fname.endswith('.vnc'):
       # vncrec file
-      movie.parse_vncrec(fname, debug=debug)
+      movie.parse_vncrec(fname, debug=debug, outtype="vnc")
+    elif fname.endswith('.novnc'):
+      # vncrec file
+      movie.parse_vncrec(fname, debug=debug, outtype="novnc")
     else:
       raise ValueError('unsupported format: %r' % fname)
     info.filename = os.path.basename(fname)

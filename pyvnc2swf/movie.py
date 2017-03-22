@@ -56,6 +56,10 @@ class SWFInfo:
     self.height = None
     self.mp3 = None
     self.scalable = False
+    self.author = ''
+    self.title = ''
+    self.tags = ''
+    self.desc = ''
     return
 
   def __repr__(self):
@@ -181,14 +185,13 @@ class MovieContainer:
     self.nframes += nframes
     return self
 
-  def parse_vncrec(self, fname, debug=0):
-    parser = RFBMovieConverter(self, debug=debug)
+  def parse_vncrec(self, fname, debug=0, outtype='vnc'):
+    parser = RFBMovieConverter(self, debug=debug, outtype=outtype)
     parser.open(fname)
     nframes = len(parser.frameinfo)
     self.parsers.append( (nframes, parser) )
     self.nframes += nframes
     return self
-
 
 ##  VNC2SWF_Parser
 ##

@@ -137,6 +137,7 @@ class VNC2SWFWithTk:
     ('FLV',       'flv',   'Macromedia Flash Video Files', '.flv'), # 3
     ('MPEG',      'mpeg',  'MPEG Files', '.mpeg'),               # 2
     ('VNCRec',    'vnc',   'VNCRec Files', '.vnc'),              # 4
+    ('noVNC',     'novnc', 'noVNC Files', '.novnc'),             # 5
     ]
 
   def __init__(self, tempdir, info,
@@ -196,6 +197,46 @@ class VNC2SWFWithTk:
         self.file_new(True)
       return
 
+    def option_author():
+      x = tkEntryDialog('Author', 'Author? (abc <xxx@yyy.zzz>)', pattern='^[a-zA-Z0-9 _.-]+ <[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+>$',
+                        default=self.info.author, master=self.root).result
+      if not x: return
+      author = x
+      if author != self.info.author and self.file_new_ask():
+        self.info.author = author
+        self.file_new(True)
+      return
+
+    def option_title():
+      x = tkEntryDialog('Title', 'Title?', pattern='^[a-zA-Z0-9 _.+-]+$',
+                        default=self.info.title, master=self.root).result
+      if not x: return
+      title = x
+      if title != self.info.title and self.file_new_ask():
+        self.info.title = title
+        self.file_new(True)
+      return
+
+    def option_tags():
+      x = tkEntryDialog('Tags', 'Tags?', pattern='^[a-zA-Z0-9 ,]+$',
+                        default=self.info.tags, master=self.root).result
+      if not x: return
+      tags = x
+      if tags != self.info.tags and self.file_new_ask():
+        self.info.tags = tags
+        self.file_new(True)
+      return
+
+    def option_desc():
+      x = tkEntryDialog('Description', 'Description?', pattern='^[a-zA-Z0-9,. ]+$',
+                        default=self.info.desc, master=self.root).result
+      if not x: return
+      desc = x
+      if desc != self.info.desc and self.file_new_ask():
+        self.info.desc = desc
+        self.file_new(True)
+      return
+
     def option_clipping():
       try:
         s = self.info.get_clipping()
@@ -234,6 +275,10 @@ class VNC2SWFWithTk:
     for (k,v,_,_) in self.FILE_TYPES:
       type_submenu.add_radiobutton(label=k, value=v, variable=record_type, command=option_type)
     self.option_menu.add_cascade(label="Type", underline=0, menu=type_submenu)
+    self.option_menu.add_command(label="Author...", underline=0, command=option_author)
+    self.option_menu.add_command(label="Title...", underline=0, command=option_title)
+    self.option_menu.add_command(label="Tags...", underline=0, command=option_tags)
+    self.option_menu.add_command(label="Description...", underline=0, command=option_desc)
     menubar.add_cascade(label="File", underline=0, menu=self.file_menu)
     menubar.add_cascade(label="Option", underline=0, menu=self.option_menu)
     self.root.config(menu=menubar)
@@ -300,11 +345,11 @@ class VNC2SWFWithTk:
       moviefile = os.path.join(self.tempdir, 'pyvnc2swf-%d%s' % (os.getpid(), ext))
     self.info.filename = moviefile
     self.fp = None
-    if self.outtype == 'vnc':
+    if self.outtype == 'vnc' or self.outtype == 'novnc':
       self.fp = file(self.info.filename, 'wb')
       self.client = RFBNetworkClientForRecordingWithTk(
         self.host, self.port, self.fp, pwdfile=self.pwdfile,
-        preferred_encoding=self.preferred_encoding)
+        preferred_encoding=self.preferred_encoding, debug=self.debug, outtype=self.outtype, info=self.info)
       self.stream = None
     else:
       self.stream = StreamFactory(self.outtype)(self.info)
@@ -398,13 +443,13 @@ def vnc2swf(info, outtype='swf5', host='localhost', port=5900,
             preferred_encoding=(0,), subprocess=None, pwdfile=None, vncfile=None,
             debug=0, merge=False):
   fp = None
-  if outtype == 'vnc':
+  if outtype == 'vnc' or outtype == 'novnc':
     if info.filename == '-':
       fp = sys.stdout
     else:
       fp = file(info.filename, 'wb')
     client = RFBNetworkClientForRecording(host, port, fp, pwdfile=pwdfile,
-                                          preferred_encoding=preferred_encoding, debug=debug)
+                                          preferred_encoding=preferred_encoding, debug=debug, outtype=outtype, info=info)
   else:
     stream = StreamFactory(outtype)(info, debug=debug)
     converter = RFBStreamConverter(info, stream, debug=debug)
@@ -436,7 +481,10 @@ def vnc2swf(info, outtype='swf5', host='localhost', port=5900,
   if subprocess:
     subprocess.stop()
   client.close()
-  stream.close()
+  try:
+    stream.close()
+  except:
+    pass
   info.write_html()
   if fp:
     fp.close()
@@ -520,16 +568,18 @@ class Subprocess:
 def main(argv):
   import getopt
   def usage():
-    print ('usage: %s [-d] [-n] [-o filename] [-t {flv|mpeg|swf5|swf7|vnc}]'
+    print ('usage: %s [-d] [-n] [-o filename] [-t {flv|mpeg|swf5|swf7|vnc|novnc}]'
            ' [-e encoding] [-N] [-C clipping] [-r framerate] [-s scaling] [-z] [-m] [-a] [-V]'
+           ' [-A author] [-T title] [-G tags] [-D description]'
            ' [-S subprocess] [-P pwdfile] [host[:display] [port]]' % argv[0])
     return 100
   try:
-    (opts, args) = getopt.getopt(argv[1:], 'dno:t:e:NC:r:S:P:s:zmaV')
+    (opts, args) = getopt.getopt(argv[1:], 'dno:t:e:NC:r:S:P:A:T:G:D:s:zmaV')
   except getopt.GetoptError:
     return usage()
   (debug, console, outtype, subprocess, merge, pwdfile, isfile) = (0, False, None, None, False, None, False)
-  (cursor, host, port, preferred_encoding) = (True, 'localhost', 5900, (0,))
+  (cursor, host, port, preferred_encoding) = (True, 'localhost', 5900, (-260,0x05,0x02,0x00,-26,-247,-223,-224,-258,-308,-312,-313,))
+  #(cursor, host, port, preferred_encoding) = (True, 'localhost', 5900, (0x01,-260,0x05,0x02,0x00,-26,-247,-223,-224,-258,-308,-312,-313,))
   info = SWFInfo()
   for (k, v) in opts:
     if k == '-d': debug += 1
@@ -552,6 +602,14 @@ def main(argv):
         return usage()
     elif k == "-r":
       info.framerate = int(v)
+    elif k == "-A":
+      info.author = v
+    elif k == "-T":
+      info.title = v
+    elif k == "-G":
+      info.tags = v
+    elif k == "-D":
+      info.desc = v
     elif k == "-z":
       info.set_scalable(True)
     elif k == '-s':
@@ -561,6 +619,8 @@ def main(argv):
     if info.filename:
       if info.filename.endswith('.vnc'):
         outtype = 'vnc'
+      elif info.filename.endswith('.novnc'):
+        outtype = 'novnc'
       elif info.filename.endswith('.swf'):
         outtype = 'swf5'
       elif info.filename.endswith('.mpg') or info.filename.endswith('.mpeg'):
@@ -569,11 +629,11 @@ def main(argv):
         outtype = 'flv'
     else:
       outtype = 'swf5'
-  if outtype not in ('swf5','swf7','vnc','mpeg','flv'):
+  if outtype not in ('swf5','swf7','vnc','mpeg','flv', 'novnc'):
     print 'Please specify the output type or file extension.'
     return usage()
-  if cursor:
-    preferred_encoding += (-232,-239,)
+  if not cursor:
+    preferred_encoding += (-239,)
   if 1 <= len(args):
     if ':' in args[0]:
       i = args[0].index(':')

@@ -26,7 +26,7 @@
 # For the details of RFB protocol,
 # see http://www.realvnc.com/docs/rfbproto.pdf
 
-import sys, time, socket
+import sys, time, socket, re, os
 from struct import pack, unpack
 from d3des import decrypt_passwd, generate_response
 from image import IMG_SOLID, IMG_RAW
@@ -88,23 +88,34 @@ class RFBFrameBuffer:
 class RFBProxy:
   "Abstract class of RFB clients."
 
-  def __init__(self, fb=None, pwdfile=None, preferred_encoding=(5,0), debug=0):
+  def __init__(self, fb=None, pwdfile=None, preferred_encoding=(5,0), debug=0, outtype='swf5'):
     self.fb = fb
     self.debug = debug
     self.pwdfile = pwdfile
     self.pwdcache = None
+    self.outtype = outtype
     self.preferred_encoding = preferred_encoding
+    if outtype == 'novnc':
+      self.FASTEST_FORMAT = (32, 8, 1, 1, 255, 255, 255, 8, 16, 24)
+    else:
+      self.FASTEST_FORMAT = (32, 8, 1, 1, 255, 255, 255, 24, 16, 8)
+
     return
 
-  FASTEST_FORMAT = (32, 8, 1, 1, 255, 255, 255, 24, 16, 8)
   def preferred_format(self, bitsperpixel, depth, bigendian, truecolour,
                        red_max, green_max, blue_max,
                        red_shift, green_shift, blue_shift):
     # should return 10-tuple (bitsperpixel, depth, bigendian, truecolour,
     #   red_max, green_max, blue_max, red_shift, green_shift, blue_shift)
     if self.fb:
-      self.fb.set_converter(lambda data: data,
-                            lambda data: unpack('BBBx', data))
+      if self.outtype == 'novnc':
+        def getrgb(data):
+          (r, g, b) = data
+          return (b, g, r)
+        self.fb.set_converter(lambda data: ''.join([ data[i+2]+data[i+1]+data[i]+data[3] for i in xrange(0, len(data), 4) ]),
+                              lambda data: getrgb(unpack('BBBx', data)))
+      else:
+        self.fb.set_converter(lambda data: data, lambda data: unpack('BBBx', data))
     return self.FASTEST_FORMAT
   
   def send(self, s):
@@ -115,7 +126,7 @@ class RFBProxy:
     "Receive n-bytes data from the server."
     raise NotImplementedError
 
-  def recv_relay(self, n):
+  def recv_relay(self, n, x = ''):
     "Same as recv() except the received data is also passed to self.relay.recv_framedata."
     return self.recv(n)
 
@@ -125,17 +136,25 @@ class RFBProxy:
   def write(self, n):
     return
   
-  def request_update(self):
+  def request_update(self, update = 0):
     "Send a request to the server."
     raise NotImplementedError
-  def finish_update(self):
+
+  def finish_update(self, update = 1):
+    if not update: return
+
     if self.fb:
       self.fb.update_screen(time.time())
     return
   
+  def finish(self):
+    return
+
   def init(self):
     # recv: server protocol version
-    server_version = self.recv(12)
+    self.request_update(0)
+    server_version = self.recv_relay(12)
+    self.finish_update(0)
     # send: client protocol version
     self.protocol_version = 3
     if server_version.startswith('RFB 003.007'):
@@ -166,7 +185,9 @@ class RFBProxy:
       if not p:
         raise RFBError('Auth cancelled')
       # from pyvncviewer
-      challange = self.recv(16)
+      self.request_update(0)
+      challange = self.recv_relay(16)
+      self.finish_update(0)
       if self.debug:
         print >>stderr, 'challange: %r' % challange
       response = generate_response(p, challange)
@@ -174,20 +195,26 @@ class RFBProxy:
         print >>stderr, 'response: %r' % response
       self.send(response)
       # recv: security result
-      (result,) = unpack('>L', self.recv(4))
+      self.request_update(0)
+      (result,) = unpack('>L', self.recv_relay(4))
+      self.finish_update(0)
       return (p, result)
 
     (p, server_result) = (None, 0)
     if self.protocol_version == 3:
       # protocol 3.3 (or 3.6)
       # recv: server security
-      (server_security,) = unpack('>L', self.recv(4))
+      self.request_update(0)
+      (server_security,) = unpack('>L', self.recv_relay(4))
+      self.finish_update(0)
       if self.debug:
         print >>stderr, 'server_security: %r' % server_security
       # server_security might be 0, 1 or 2.
       if server_security == 0:
-        (reason_length,) = unpack('>L', self.recv(4))
-        reason = self.recv(reason_length)
+        self.request_update(0)
+        (reason_length,) = unpack('>L', self.recv_relay(4))
+        reason = self.recv_relay(reason_length)
+        self.finish_update(0)
         raise RFBAuthError('Auth Error: %s' % reason)
       elif server_security == 1:
         pass
@@ -196,8 +223,10 @@ class RFBProxy:
     else:
       # protocol 3.7 or 3.8
       # recv: multiple server securities
-      (nsecurities,) = unpack('>B', self.recv(1))
-      server_securities = self.recv(nsecurities)
+      self.request_update(0)
+      (nsecurities,) = unpack('>B', self.recv_relay(1))
+      server_securities = self.recv_relay(nsecurities)
+      self.finish_update(0)
       if self.debug:
         print >>stderr, 'server_securities: %r' % server_securities
       # must include None or VNCAuth
@@ -206,7 +235,9 @@ class RFBProxy:
         self.send('\x01')
         if self.protocol_version == 8:
           # Protocol 3.8: must recv security result
-          (server_result,) = unpack('>L', self.recv(4))
+          self.request_update(0)
+          (server_result,) = unpack('>L', self.recv_relay(4))
+          self.finish_update(0)
         else:
           server_result = 0
       elif '\x02' in server_securities:
@@ -219,8 +250,10 @@ class RFBProxy:
     if server_result != 0:
       # auth failed.
       if self.protocol_version != 3:
-        (reason_length,) = unpack('>L', self.recv(4))
+        self.request_update(0)
+        (reason_length,) = unpack('>L', self.recv_relay(4))
         reason = self.recv(reason_length)
+        self.finish_update(0);
       else:
         reason = server_result
       raise RFBAuthError('Auth Error: %s' % reason)
@@ -233,6 +266,7 @@ class RFBProxy:
 
   def start(self):
     # server info.
+    self.request_update(0);
     server_init = self.recv(24)
     (width, height, pixelformat, namelen) = unpack('>HH16sL', server_init)
     self.name = self.recv(namelen)
@@ -258,8 +292,8 @@ class RFBProxy:
                        red_max, green_max, blue_max,
                        red_shift, green_shift, blue_shift)
     self.send(pixelformat)
-    self.write(pack('>HH16sL', width, height, pixelformat, namelen))
-    self.write(self.name)
+    self.recv_relay(0, pack('>HH16sL', width, height, pixelformat, namelen) + self.name)
+    self.finish_update(0);
     if self.fb:
       self.clipping = self.fb.init_screen(width, height, self.name)
     else:
@@ -472,6 +506,7 @@ class RFBProxy:
     return self
 
   def close(self):
+    self.finish()
     if self.fb:
       self.fb.close()
     return
@@ -482,9 +517,9 @@ class RFBProxy:
 class RFBNetworkClient(RFBProxy):
   
   def __init__(self, host, port, fb=None, pwdfile=None,
-               preferred_encoding=(0,5), debug=0):
+               preferred_encoding=(0,5), debug=0, outtype='swf5'):
     RFBProxy.__init__(self, fb=fb, pwdfile=pwdfile,
-                      preferred_encoding=preferred_encoding, debug=debug)
+                      preferred_encoding=preferred_encoding, debug=debug, outtype=outtype)
     self.host = host
     self.port = port
     return
@@ -524,7 +559,9 @@ class RFBNetworkClient(RFBProxy):
     import getpass
     return getpass.getpass('Password for %s:%d: ' % (self.host, self.port))
 
-  def request_update(self):
+  def request_update(self, update = 1):
+    if not update: return
+
     if self.debug:
       print >>stderr, 'FrameBufferUpdateRequest'
     self.send('\x03\x01' + pack('>HHHH', *self.clipping))
@@ -541,37 +578,85 @@ class RFBNetworkClient(RFBProxy):
 class RFBNetworkClientForRecording(RFBNetworkClient):
   
   def __init__(self, host, port, fp, pwdfile=None,
-               preferred_encoding=(5,0), debug=0):
+               preferred_encoding=(5,0), debug=0, outtype='swf5', info=''):
     RFBNetworkClient.__init__(self, host, port, fb=None, pwdfile=pwdfile,
-                              preferred_encoding=preferred_encoding, debug=debug)
-    print >>stderr, 'Creating vncrec: %r: vncLog0.0' % fp
+                              preferred_encoding=preferred_encoding, debug=debug, outtype=outtype)
     self.fp = fp
-    self.write('vncLog0.0')
-    # disguise data (security=none)
-    self.write('RFB 003.003\x0a')
-    self.write('\x00\x00\x00\x01')
+    self.outtype = outtype
+    self.debug = debug
     self.updated = True
+    self.info = info
+
+    if outtype == 'vnc':
+      # update the version from 0.0 to 0.1
+      self.data = 'vncLog0.1'
+      print >>stderr, 'Creating %srec: %r: %s' % (outtype, fp, self.data)
+    else:
+      t = time.time()
+      self.start_time = int(t*1000)
+
+      self.data = "var VNC_frame_create = '%r';\n" % t
+
+      for i in ('author', 'title', 'tags', 'desc'):
+        # Prefer info to environment variables
+        val = eval("self.info.%s" % i)
+        if not val:
+          val = os.environ.get('VNC_frame_%s' % i)
+        if val:
+          self.data += "var VNC_frame_%s = '%s';\n" % (i, val)
+
+      self.data += "var VNC_frame_encoding = 'binary';\n"
+      self.data += 'var VNC_frame_data = [\n'
+      print >>stderr, 'Creating %s record: %r' % (outtype, fp)
+
+    self.write(self.data)
+    if self.debug:
+      print "%r" % self.data
     return
+
+  def finish(self):
+    if self.outtype == 'novnc':
+      self.data = "'EOF'];"
+      self.write(self.data);
+      if self.debug:
+        print "%r" % self.data
+      self.fp.flush()
+      os.fsync(self.fp)
 
   def write(self, x):
     self.fp.write(x)
     return
 
-  def request_update(self):
+  def request_update(self, update = 1):
     if self.updated:
       self.updated = False
       t = time.time()
-      self.write(pack('>LL', int(t), int((t-int(t))*1000000)))
-      RFBNetworkClient.request_update(self)
+      if self.outtype == 'vnc':
+        self.data = pack('>LL', int(t), int((t-int(t))*1000000))
+      else:
+        delta = int(time.time()*1000) - self.start_time
+        self.data = "{%d{" % delta
+      if update:
+        RFBNetworkClient.request_update(self, update)
     return
-  
-  def finish_update(self):
+
+  def finish_update(self, update = 1):
+    if self.outtype == 'vnc':
+      if len(self.data) > 8:
+        #if self.debug:
+        #  print "%r" % self.data
+        self.write(self.data)
+    else:
+      if self.data[-1] != '{':
+        #if self.debug:
+        #  print "%s,\n" % repr(self.data)
+        self.write("%s,\n" % repr(self.data))
     self.updated = True
     return
   
-  def recv_relay(self, n):
-    data = self.recv(n)
-    self.write(data)
+  def recv_relay(self, n, x = ''):
+    data = self.recv(n) if not x else x
+    self.data += data
     return data
 
 
@@ -581,6 +666,7 @@ class RFBFileParser(RFBProxy):
   
   def __init__(self, fp, fb=None, debug=0):
     RFBProxy.__init__(self, fb=fb, debug=debug)
+    self.rec_version = ''
     if self.fb:
       self.fb.change_format = False
     self.fp = fp
@@ -592,6 +678,7 @@ class RFBFileParser(RFBProxy):
     if (bitsperpixel, depth, bigendian, truecolour,
         red_max, green_max, blue_max,
         red_shift, green_shift, blue_shift) == self.FASTEST_FORMAT:
+
       return RFBProxy.preferred_format(self, bitsperpixel, depth, bigendian, truecolour,
                                        red_max, green_max, blue_max,
                                        red_shift, green_shift, blue_shift)
@@ -631,24 +718,27 @@ class RFBFileParser(RFBProxy):
 
   def init(self):
     self.curtime = 0
-    version = self.fp.read(9)
-    print >>stderr, 'Reading vncrec file: %s, version=%r...' % (self.fp, version)
-    if version != 'vncLog0.0':
-      raise RFBProtocolError('Unsupported vncrec version: %r' % version)
+    self.rec_version = self.fp.read(9)
+    print >>stderr, 'Reading vncrec file: %s, version=%r...' % (self.fp, self.rec_version)
+    if self.rec_version not in ('vncLog0.0', 'vncLog0.1'):
+      raise RFBProtocolError('Unsupported vncrec version: %r' % self.rec_version)
     return RFBProxy.init(self)
-  
+
   def recv(self, n):
     x = self.fp.read(n)
     if len(x) != n:
       raise EOFError
     return x
 
+  def getpass(self):
+    return "nopasswd"
+
   def send(self, s):
     return
 
   def auth(self):
     # XXX for some reason, we force it act as ver 3.3 client.
-    if self.protocol_version == 3 or True:
+    if self.protocol_version == 3:
       # protocol 3.3
       # recv: server security
       (server_security,) = unpack('>L', self.recv(4))
@@ -662,12 +752,16 @@ class RFBFileParser(RFBProxy):
       RFBProxy.auth(self)
     return self
 
-  def request_update(self):
+  def request_update(self, update = 1):
+    if self.rec_version == "vncLog0.0" and not update: return
+
     (sec, usec) = unpack('>LL', self.recv(8))
     self.curtime = sec+usec/1000000.0
     return
-  
-  def finish_update(self):
+
+  def finish_update(self, update = 1):
+    if not update: return
+
     if self.fb:
       self.fb.update_screen(self.curtime) # use the file time instead
     return
@@ -685,6 +779,87 @@ class RFBFileParser(RFBProxy):
     self.fp.close()
     return
 
+class RFBFileParser_noVNC(RFBFileParser):
+
+  def __init__(self, fp, fb=None, debug=0):
+    RFBProxy.__init__(self, fb=fb, debug=debug, outtype='novnc')
+    self.rec_version = ''
+    if self.fb:
+      self.fb.change_format = False
+    self.fp = fp
+
+    self.data = ''
+    self.frame_idx = -1
+    self.frame_length = 0
+    self.frame_start = 0
+    return
+
+  def seek(self, pos):
+    self.frame_idx = pos
+    return
+
+  def tell(self):
+    return self.frame_idx
+
+  def init(self):
+    self.curtime = 0
+    self.rec_version = 'novnc'
+    print >>stderr, 'Reading noVNC file: %s, version=%r...' % (self.fp, self.rec_version)
+    if self.fp.readline().find("var VNC_frame") < 0:
+      raise RFBProtocolError('Unsupported novnc format')
+    self.fp.seek(0)
+
+    try:
+      exec(self.fp.read().replace('var VNC_', 'VNC_'))
+    except:
+      raise RFBError('invalid noVNC Session')
+
+    self.data = VNC_frame_data
+    self.frame_length = len(self.data)
+
+    return RFBProxy.init(self)
+
+  def recv(self, n):
+    x = self.data[self.frame_idx][self.frame_start:self.frame_start + n]
+    self.frame_start += n
+    return x
+
+  def request_update(self, update = 1):
+    self.frame_idx += 1
+    while (self.frame_idx < self.frame_length - 1) and (self.data[self.frame_idx][0] == '}'):
+      self.frame_idx += 1
+
+    if self.frame_idx >= self.frame_length - 1: return
+
+    m = re.match(r'[{}]([0-9]{1,})[{}]', self.data[self.frame_idx])
+    if m and len(m.groups()):
+      cur_time = m.group(1)
+      self.curtime = int(cur_time)/1000.0
+      self.frame_start = len(cur_time) + 2
+    elif self.data == 'EOF':
+      if self.debug:
+        print >>stderr, 'EOF'
+
+    if self.debug:
+      print "curtime: %s, curframe: %d" % (self.curtime, self.frame_idx)
+    return
+
+  def finish_update(self, update = 1):
+    if self.frame_idx >= self.frame_length - 1: return
+    if not update: return
+    if self.fb:
+      self.fb.update_screen(self.curtime) # use the file time instead
+    return
+
+  def loop(self, endpos=0):
+    if endpos == -1: endpos = self.frame_length - 1
+
+    if self.debug:
+      print "endpos: %d" % endpos
+    while self.loop1():
+      if endpos and endpos <= self.tell(): break
+
+    return self
 
 ##  RFBConverter
 ##
@@ -726,14 +901,14 @@ class RFBConverter(RFBFrameBuffer):
       self.t0 = t
     return int((t - self.t0) * self.info.framerate)+1
 
-
 ##  RFBMovieConverter
 ##
 class RFBMovieConverter(RFBConverter):
 
-  def __init__(self, movie, debug=0):
+  def __init__(self, movie, debug=0, outtype='vnc'):
     RFBConverter.__init__(self, movie.info, debug)
     self.movie = movie
+    self.outtype = outtype
     self.frameinfo = []
     return
 
@@ -749,7 +924,11 @@ class RFBMovieConverter(RFBConverter):
 
   def update_screen(self, t):
     if not self.processing:
-      frames = RFBConverter.calc_frames(self, t)
+      if self.outtype == 'vnc':
+        frames = RFBConverter.calc_frames(self, t)
+      else:
+        # FIXME: only a workaround
+        frames = len(self.frameinfo) + 1
       done = False
       while len(self.frameinfo) < frames:
         if done:
@@ -766,7 +945,12 @@ class RFBMovieConverter(RFBConverter):
   def open(self, fname):
     self.processing = False
     fp = file(fname, 'rb')
-    self.rfbparser = RFBFileParser(fp, self, self.debug)
+    if self.outtype == 'vnc':
+      self.rfbparser = RFBFileParser(fp, self, self.debug)
+    else:
+      # FIXME: only a workaround
+      # self.info.framerate = 5
+      self.rfbparser = RFBFileParser_noVNC(fp, self, self.debug)
     self.rfbparser.init().auth().start()
     self.beginpos = self.rfbparser.tell()
     self.rfbparser.loop()
@@ -783,7 +967,6 @@ class RFBMovieConverter(RFBConverter):
     self.cursor_pos = None
     self.rfbparser.loop(endpos)
     return (self.images, [], (self.cursor_image, self.cursor_pos))
-
 
 ##  RFBStreamConverter
 ##

@@ -1,0 +1,17 @@
+VNC_SERVER=localhost
+VNC_PORT=5900
+VNC_PWD=ubuntu
+VNC_PWD_FILE=.vnc.pwd.file
+VNC_RECORD_FILE=$(date -u +"%Y%m%d%H%M%S")
+VNC_SCREEN_SIZE=800x600
+VNC_CURSOR=1
+VNC_CONSOLE=0
+VNC_FPS=60
+
+VNC_frame_author="Wu Zhangjin <wuzhangjin@gmail.com>"
+#VNC_frame_title="Linux Lab"
+#VNC_frame_tags="Linux, Lab"
+#VNC_frame_desc="A Lab for Linux OS Learning."
+
+# Export for noVNC recording ...
+export VNC_frame_author VNC_frame_title VNC_frame_tags VNC_frame_desc
