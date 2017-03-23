@@ -315,7 +315,7 @@ class VNC2SWFWithTk:
     else:
       s.append('Recording.')
       self.toggle_button.config(text='Stop', underline=0)
-      self.toggle_button.config(background='#ff8080', activebackground='#ff0000')
+      self.toggle_button.config(background='#80ff80', activebackground='#ff0000')
       self.toggle_button.config(command=self.client.interrupt)
       self.root.bind('<s>', lambda e: self.client.interrupt())
       self.root.bind('<space>', lambda e: self.client.interrupt())
