@@ -37,10 +37,13 @@ if [ $PASSWD -eq 1 ]; then
     PASSWD_OPT=" -P $VNC_PWD_FILE "
 fi
 if [ $VNC_SERVER == "localhost" -a $SERVER -eq 1 ]; then
-    pkill x11vnc
-    #x11vnc -scale $SCREEN_SIZE  -quiet -cursor -viewonly -bg -localhost -wait 10 -defer 10 -rfbauth $VNC_PWD_FILE
-    #x11vnc -quiet -cursor -viewonly -bg -localhost -rfbauth $VNC_PWD_FILE
-    x11vnc -quiet -viewonly -bg -localhost -rfbauth $VNC_PWD_FILE
+    ps -ef | grep -q "x11vnc*forever*viewonly*localhost"
+    if [ $? -ne 0 ]; then
+        #pkill x11vnc
+        #x11vnc -scale $SCREEN_SIZE  -quiet -cursor -viewonly -bg -localhost -wait 10 -defer 10 -rfbauth $VNC_PWD_FILE
+        #x11vnc -quiet -cursor -viewonly -bg -localhost -rfbauth $VNC_PWD_FILE
+        x11vnc -quiet -forever -viewonly -bg -localhost -rfbauth $VNC_PWD_FILE
+    fi
 fi
 
 VNC_RECORD_FILE=${RECORDINGS}/${VNC_RECORD_FILE}.${OUTTYPE}
