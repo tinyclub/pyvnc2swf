@@ -595,7 +595,7 @@ class RFBNetworkClientForRecording(RFBNetworkClient):
       self.start_time = 0
       self.data = "var VNC_frame_create = '%r';\n" % time.time()
 
-      for i in ('author', 'title', 'tags', 'desc'):
+      for i in ('author', 'title', 'category', 'tags', 'desc'):
         # Prefer info to environment variables
         val = eval("self.info.%s" % i)
         if not val:

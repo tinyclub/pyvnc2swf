@@ -58,6 +58,7 @@ class SWFInfo:
     self.scalable = False
     self.author = ''
     self.title = ''
+    self.category = ''
     self.tags = ''
     self.desc = ''
     return

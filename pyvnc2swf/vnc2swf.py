@@ -217,6 +217,16 @@ class VNC2SWFWithTk:
         self.file_new(True)
       return
 
+    def option_category():
+      x = tkEntryDialog('Category', 'Category?', pattern='^[a-zA-Z0-9 ,]+$',
+                        default=self.info.category, master=self.root).result
+      if not x: return
+      category = x
+      if category != self.info.category and self.file_new_ask():
+        self.info.category = category
+        self.file_new(True)
+      return
+
     def option_tags():
       x = tkEntryDialog('Tags', 'Tags?', pattern='^[a-zA-Z0-9 ,]+$',
                         default=self.info.tags, master=self.root).result
@@ -277,6 +287,7 @@ class VNC2SWFWithTk:
     self.option_menu.add_cascade(label="Type", underline=0, menu=type_submenu)
     self.option_menu.add_command(label="Author...", underline=0, command=option_author)
     self.option_menu.add_command(label="Title...", underline=0, command=option_title)
+    self.option_menu.add_command(label="Category...", underline=0, command=option_category)
     self.option_menu.add_command(label="Tags...", underline=0, command=option_tags)
     self.option_menu.add_command(label="Description...", underline=0, command=option_desc)
     menubar.add_cascade(label="File", underline=0, menu=self.file_menu)
@@ -313,7 +324,7 @@ class VNC2SWFWithTk:
       self.root.bind('<space>', lambda e: self.record())
       enable_menus('normal')
     else:
-      s.append('Recording.')
+      s.append('Recording...')
       self.toggle_button.config(text='Stop', underline=0)
       self.toggle_button.config(background='#80ff80', activebackground='#ff0000')
       self.toggle_button.config(command=self.client.interrupt)
@@ -392,10 +403,17 @@ class VNC2SWFWithTk:
           return
       self.root.destroy()
     return
-  
+
+  #def stop_record(self):
+  #  if self.recording:
+  #    self.client.interrupt()
+
   # Do recording.
   def record(self):
     self.client.tk_init(self.root)
+    #self.root.iconify()
+    #if self.outtype == 'novnc':
+    #  self.root.bind('<Enter>', lambda e: self.stop_record())
     try:
       self.client.init().auth().start()
     except socket.error, e:
@@ -422,6 +440,8 @@ class VNC2SWFWithTk:
     self.recording = False
     self.set_status()
     if self.exit_immediately:
+      self.file_exit()
+    if self.outtype == 'novnc':
       self.file_exit()
     return
 
@@ -570,11 +590,11 @@ def main(argv):
   def usage():
     print ('usage: %s [-d] [-n] [-o filename] [-t {flv|mpeg|swf5|swf7|vnc|novnc}]'
            ' [-e encoding] [-N] [-C clipping] [-r framerate] [-s scaling] [-z] [-m] [-a] [-V]'
-           ' [-A author] [-T title] [-G tags] [-D description]'
+           ' [-A author] [-T title] [-c Categories] [-G tags] [-D description]'
            ' [-S subprocess] [-P pwdfile] [host[:display] [port]]' % argv[0])
     return 100
   try:
-    (opts, args) = getopt.getopt(argv[1:], 'dno:t:e:NC:r:S:P:A:T:G:D:s:zmaV')
+    (opts, args) = getopt.getopt(argv[1:], 'dno:t:e:NC:r:S:P:A:T:c:G:D:s:zmaV')
   except getopt.GetoptError:
     return usage()
   (debug, console, outtype, subprocess, merge, pwdfile, isfile) = (0, False, None, None, False, None, False)
@@ -606,6 +626,8 @@ def main(argv):
       info.author = v
     elif k == "-T":
       info.title = v
+    elif k == "-c":
+      info.category = v
     elif k == "-G":
       info.tags = v
     elif k == "-D":

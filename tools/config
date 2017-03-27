@@ -2,6 +2,7 @@ VNC_SERVER=localhost
 VNC_PORT=5900
 VNC_PWD=ubuntu
 VNC_PWD_FILE=.vnc.pwd.file
+VNC_RECORDINGS=${TOP_DIR}/recordings/
 VNC_RECORD_FILE=$(date -u +"%Y%m%d%H%M%S")
 VNC_SCREEN_SIZE=800x600
 VNC_CURSOR=1

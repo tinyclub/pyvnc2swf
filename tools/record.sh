@@ -7,7 +7,7 @@ TOP_DIR=$(cd $(dirname $0) && pwd)/../
 
 RECORDER=${TOP_DIR}/pyvnc2swf/vnc2swf.py
 TOOLS=${TOP_DIR}/tools/
-RECORDINGS=${TOP_DIR}/recordings/
+CONFIG=${TOOLS}/config
 
 [ -z "$OUTTYPE" ] && OUTTYPE=vnc
 [ -z "$DEBUG" ] && DEBUG=0
@@ -16,8 +16,9 @@ RECORDINGS=${TOP_DIR}/recordings/
 [ -z "$CONSOLE" ] && CONSOLE=0
 [ -z "$SERVER" ] && SERVER=1 && PASSWD=1
 
-. ${TOOLS}/config
+. ${CONFIG}
 
+[ -z "$RECORDINGS" ] && RECORDINGS=$VNC_RECORDINGS
 [ -z "$CONSOLE" ] && CONSOLE=$VNC_CONSOLE
 [ -z "$CURSOR" ] && CURSOR=$VNC_CURSOR
 [ -z "$SCREEN_SIZE" ] && SCREEN_SIZE=$VNC_SCREEN_SIZE
@@ -46,7 +47,10 @@ if [ $VNC_SERVER == "localhost" -a $SERVER -eq 1 ]; then
     fi
 fi
 
-VNC_RECORD_FILE=${RECORDINGS}/${VNC_RECORD_FILE}.${OUTTYPE}
+VNC_RECORD_DIR=${RECORDINGS}/`date -u +"%Y-%m-%d"`
+[ ! -d $VNC_RECORD_DIR ] && mkdir $VNC_RECORD_DIR
+
+VNC_RECORD_FILE=${VNC_RECORD_DIR}/${VNC_RECORD_FILE}.${OUTTYPE}
 VNC_RECORD_FILE=$(cd $(dirname $VNC_RECORD_FILE) && pwd)/$(basename $VNC_RECORD_FILE)
 OUTFILE=" -o $VNC_RECORD_FILE "
 
