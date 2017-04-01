@@ -38,7 +38,7 @@ if [ $PASSWD -eq 1 ]; then
     PASSWD_OPT=" -P $VNC_PWD_FILE "
 fi
 if [ $VNC_SERVER == "localhost" -a $SERVER -eq 1 ]; then
-    ps -ef | grep -q "x11vnc*forever*viewonly*localhost"
+    ps -ef | grep -v grep | grep -q "x11vnc.*forever.*viewonly.*localhost"
     if [ $? -ne 0 ]; then
         #pkill x11vnc
         #x11vnc -scale $SCREEN_SIZE  -quiet -cursor -viewonly -bg -localhost -wait 10 -defer 10 -rfbauth $VNC_PWD_FILE
