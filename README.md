@@ -46,6 +46,14 @@ Here is the Python version, please get more information from its original homepa
 
 ## Quickstart
 
+Use raw commands:
+
     $ x11vnc -quiet -cursor -viewonly -bg -localhost -nopw && ./vnc2swf.py -n -o out.swf :0
 
     $ tcpserver -vRHl0 localhost 10000 sh -c 'x11vnc -quiet -bg -nopw -viewonly -localhost -cursor -wait 10 -defer 10 >/dev/null 2>&1 && echo HTTP/1.0 200 OK && echo Content-Type: video/x-flv && echo && ./vnc2swf.py -n -t flv -o -'
+
+Use commands wrapper:
+
+    $ tools/record.sh    # Record the session
+
+    $ tools/play.sh      # Replay the session
